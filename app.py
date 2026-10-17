@@ -14,6 +14,8 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shia Azan Times</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Timezone Lookup Library -->
+    <script src="https://cdn.jsdelivr.net/npm/tz-lookup@6.1.25/tz.min.js"></script>
     <style>
         :root {
             --primary: #0f766e;
@@ -50,7 +52,6 @@ HTML_TEMPLATE = """
         }
         .subtitle { text-align: center; color: var(--text-muted); font-size: 12px; margin-bottom: 20px; letter-spacing: 1px; text-transform: uppercase; }
         
-        /* Countdown Banner */
         .countdown-banner {
             background: linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(15, 118, 110, 0.2));
             border: 1px solid var(--primary-light); border-radius: 12px;
@@ -95,14 +96,12 @@ HTML_TEMPLATE = """
         <h1>Azan Times</h1>
         <div class="subtitle">Jafari Method (Shia Ithna Ashari)</div>
 
-        <!-- NEXT PRAYER COUNTDOWN -->
         <div class="countdown-banner" id="countdown-banner">
             <div class="countdown-title" id="next-prayer-name">Next Prayer</div>
             <div class="countdown-timer" id="countdown-timer">00:00:00</div>
         </div>
 
         <form method="POST">
-            <!-- CITY SEARCH -->
             <div class="input-group">
                 <label>Search City</label>
                 <input type="text" id="city-search" placeholder="e.g., Auckland, London, Qom" onkeyup="searchCity()">
@@ -127,7 +126,6 @@ HTML_TEMPLATE = """
 
         {% if times %}
             <div class="times-container">
-                <!-- HIJRI DATE -->
                 <div class="hijri-date" id="hijri-date">Loading Hijri Date...</div>
                 
                 <div class="prayer-list">
@@ -140,14 +138,13 @@ HTML_TEMPLATE = """
                     <div class="prayer-item main-prayer"><span>🌃 Isha</span><span>{{ times['isha'] }}</span></div>
                 </div>
 
-                <!-- QIBLA DIRECTION -->
                 <div class="qibla-box">
                     🕋 Qibla Direction: <strong>{{ qibla }}°</strong> from North
                 </div>
             </div>
 
             <script>
-                // --- 1. CITY SEARCH (OpenStreetMap API) ---
+                // --- 1. CITY SEARCH ---
                 let searchTimeout;
                 function searchCity() {
                     clearTimeout(searchTimeout);
@@ -159,25 +156,40 @@ HTML_TEMPLATE = """
                             .then(res => res.json())
                             .then(data => {
                                 if (data.length > 0) {
-                                    document.getElementById('lat').value = parseFloat(data[0].lat).toFixed(4);
-                                    document.getElementById('lng').value = parseFloat(data[0].lon).toFixed(4);
-                                    // Calculate approximate timezone based on longitude (rough estimate)
-                                    const tz = Math.round(data[0].lon / 15);
-                                    document.getElementById('tz').value = tz;
+                                    const lat = parseFloat(data[0].lat).toFixed(4);
+                                    const lng = parseFloat(data[0].lon).toFixed(4);
+                                    document.getElementById('lat').value = lat;
+                                    document.getElementById('lng').value = lng;
+                                    
+                                    // Smart Timezone detection
+                                    const tzName = tzlookup(lat, lng);
+                                    const now = new Date();
+                                    // Calculate correct offset in hours
+                                    const offset = -now.getTimezoneOffset() / 60; 
+                                    // (Using Intl to format time in that timezone and parse offset)
+                                    const dateInTz = new Date(now.toLocaleString("en-US", {timeZone: tzName}));
+                                    const diff = (dateInTz.getTime() - now.getTime()) / 3600000;
+                                    document.getElementById('tz').value = Math.round(diff);
                                 }
                             });
-                    }, 800); // Wait 0.8s after typing stops
+                    }, 800); 
                 }
 
                 // --- 2. AUTO-DETECT LOCATION ---
                 function getLocation() {
                     if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(position => {
-                            document.getElementById('lat').value = position.coords.latitude.toFixed(4);
-                            document.getElementById('lng').value = position.coords.longitude.toFixed(4);
-                            // Estimate timezone (rough)
-                            const tz = Math.round(position.coords.longitude / 15);
-                            document.getElementById('tz').value = tz;
+                            const lat = position.coords.latitude.toFixed(4);
+                            const lng = position.coords.longitude.toFixed(4);
+                            document.getElementById('lat').value = lat;
+                            document.getElementById('lng').value = lng;
+                            
+                            // Smart Timezone detection
+                            const tzName = tzlookup(lat, lng);
+                            const now = new Date();
+                            const dateInTz = new Date(now.toLocaleString("en-US", {timeZone: tzName}));
+                            const diff = (dateInTz.getTime() - now.getTime()) / 3600000;
+                            document.getElementById('tz').value = Math.round(diff);
                         });
                     } else {
                         alert("Geolocation is not supported by this browser.");
@@ -204,7 +216,6 @@ HTML_TEMPLATE = """
 
                 function updateCountdown() {
                     const now = new Date();
-                    // Convert local time to the selected timezone
                     const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
                     const targetTime = new Date(utcTime + (3600000 * tzOffset));
                     
@@ -251,21 +262,14 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- PYTHON MATH FOR QIBLA ---
 def calculate_qibla(lat, lng):
-    # Kaaba coordinates
     kaaba_lat = math.radians(21.4225)
     kaaba_lng = math.radians(39.8262)
     user_lat = math.radians(lat)
     user_lng = math.radians(lng)
-    
-    # Calculate difference in longitude
     diff_lng = kaaba_lng - user_lng
-    
-    # Formula for initial bearing (Qibla)
     x = math.sin(diff_lng)
     y = math.cos(user_lat) * math.tan(kaaba_lat) - math.sin(user_lat) * math.cos(diff_lng)
-    
     bearing = math.degrees(math.atan2(x, y))
     return round((bearing + 360) % 360, 1)
 
@@ -289,8 +293,6 @@ def index():
             date_tuple = (today.year, today.month, today.day)
             
             times = pt.getTimes(date_tuple, (lat, lng), tz_offset)
-            
-            # Calculate Qibla
             qibla = calculate_qibla(lat, lng)
 
             if not isinstance(times, dict):
