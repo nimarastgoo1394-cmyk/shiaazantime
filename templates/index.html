@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shia Azan Times</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 1rem; }
+        input { margin: 5px 0; padding: 8px; width: 100%; box-sizing: border-box; }
+        button { padding: 10px 20px; background: #2c3e50; color: white; border: none; cursor: pointer; }
+        .times { background: #f4f4f4; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+        .times ul { padding: 0; }
+        .times li { margin: 8px 0; list-style: none; }
+        .error { background: #ffe0e0; color: #b00020; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>Shia Azan Times (Jafari Method)</h1>
+
+    <form method="POST">
+        <label>Latitude:</label>
+        <input type="text" name="lat" placeholder="e.g., -36.8485" required>
+
+        <label>Longitude:</label>
+        <input type="text" name="lng" placeholder="e.g., 174.7633" required>
+
+        <label>Timezone Offset (from UTC):</label>
+        <input type="text" name="tz" placeholder="e.g., 12 for NZST, 13 for NZDT" required>
+
+        <button type="submit">Get Times</button>
+    </form>
+
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+
+    {% if times %}
+        <div class="times">
+            <h2>Today's Times</h2>
+            <p>Location: {{ location[0] }}, {{ location[1] }}</p>
+            <ul>
+                <li><strong>Fajr:</strong> {{ times['fajr'] }}</li>
+                <li><strong>Dhuhr:</strong> {{ times['dhuhr'] }}</li>
+                <li><strong>Asr:</strong> {{ times['asr'] }}</li>
+                <li><strong>Maghrib:</strong> {{ times['maghrib'] }}</li>
+                <li><strong>Isha:</strong> {{ times['isha'] }}</li>
+            </ul>
+        </div>
+    {% endif %}
+</body>
+</html>
