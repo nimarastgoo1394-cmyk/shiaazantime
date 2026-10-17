@@ -1,49 +1,34 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Shia Azan Times</title>
-    <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 1rem; }
-        input { margin: 5px 0; padding: 8px; width: 100%; box-sizing: border-box; }
-        button { padding: 10px 20px; background: #2c3e50; color: white; border: none; cursor: pointer; }
-        .times { background: #f4f4f4; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
-        .times ul { padding: 0; }
-        .times li { margin: 8px 0; list-style: none; }
-        .error { background: #ffe0e0; color: #b00020; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
-    </style>
-</head>
-<body>
-    <h1>Shia Azan Times (Jafari Method)</h1>
+from flask import Flask, render_template, request
+from praytimes import PrayTimes
+from datetime import date
 
-    <form method="POST">
-        <label>Latitude:</label>
-        <input type="text" name="lat" placeholder="e.g., -36.8485" required>
+app = Flask(__name__)
 
-        <label>Longitude:</label>
-        <input type="text" name="lng" placeholder="e.g., 174.7633" required>
+# Initialize with the Jafari method for Shia Ithna Ashari timings
+pt = PrayTimes('Jafari')
+# Jafari method typically uses the Standard (shadow factor = 1) Asr calculation
+pt.adjust({'asr': 'Standard'})
 
-        <label>Timezone Offset (from UTC):</label>
-        <input type="text" name="tz" placeholder="e.g., 12 for NZST, 13 for NZDT" required>
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    times = None
+    if request.method == 'POST':
+        try:
+            # Get coordinates from the HTML form
+            lat = float(request.form['lat'])
+            lng = float(request.form['lng'])
+            # Get the timezone offset (e.g., 12 for NZST, 13 for NZDT)
+            tz_offset = float(request.form['tz'])
+            
+            # Calculate times for today
+            # The get_times method returns a dictionary with keys like 'fajr', 'dhuhr', etc.
+            times = pt.get_times(date.today(), (lat, lng), tz_offset, format='24h')
+        except ValueError:
+            # Handle invalid input (e.g., empty fields)
+            times = "Invalid input. Please enter numbers for coordinates and timezone."
+            
+    return render_template('index.html', times=times)
 
-        <button type="submit">Get Times</button>
-    </form>
-
-    {% if error %}
-        <div class="error">{{ error }}</div>
-    {% endif %}
-
-    {% if times %}
-        <div class="times">
-            <h2>Today's Times</h2>
-            <p>Location: {{ location[0] }}, {{ location[1] }}</p>
-            <ul>
-                <li><strong>Fajr:</strong> {{ times['fajr'] }}</li>
-                <li><strong>Dhuhr:</strong> {{ times['dhuhr'] }}</li>
-                <li><strong>Asr:</strong> {{ times['asr'] }}</li>
-                <li><strong>Maghrib:</strong> {{ times['maghrib'] }}</li>
-                <li><strong>Isha:</strong> {{ times['isha'] }}</li>
-            </ul>
-        </div>
-    {% endif %}
-</body>
-</html>
+if __name__ == '__main__':
+    # This runs the app locally on Windows for testing
+    app.run(debug=True, host='0.0.0.0', port=5000)
