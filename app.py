@@ -72,12 +72,11 @@ def index():
             pt = PrayTimes('Jafari')
             pt.adjust({'asr': 'Standard'})
             
-            # THE FIX: PrayTimes requires the date to be a tuple (year, month, day)
             today = datetime.now()
             date_tuple = (today.year, today.month, today.day)
             
-            # Calculate times
-            times = pt.get_times(date_tuple, (lat, lng), tz_offset, format='24h')
+            # THE FIX: The method is actually getTimes (camelCase)
+            times = pt.getTimes(date_tuple, (lat, lng), tz_offset)
             
             # Check if the library returned an error string instead of a dictionary
             if not isinstance(times, dict):
