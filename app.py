@@ -1,6 +1,7 @@
 from flask import Flask, request
 from praytimes import PrayTimes
 from datetime import datetime
+import math
 from jinja2 import Template
 
 app = Flask(__name__)
@@ -35,52 +36,58 @@ HTML_TEMPLATE = """
             padding: 20px;
         }
         .container {
-            width: 100%;
-            max-width: 500px;
+            width: 100%; max-width: 500px;
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            padding: 40px 30px;
+            border-radius: 24px; padding: 40px 30px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            animation: fadeIn 0.6s ease-out;
         }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         h1 {
             text-align: center; font-size: 28px; font-weight: 700; margin-bottom: 5px;
             background: linear-gradient(to right, #5eead4, #2dd4bf);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .subtitle { text-align: center; color: var(--text-muted); font-size: 14px; margin-bottom: 30px; letter-spacing: 1px; text-transform: uppercase; }
+        .subtitle { text-align: center; color: var(--text-muted); font-size: 12px; margin-bottom: 20px; letter-spacing: 1px; text-transform: uppercase; }
+        
+        /* Countdown Banner */
+        .countdown-banner {
+            background: linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(15, 118, 110, 0.2));
+            border: 1px solid var(--primary-light); border-radius: 12px;
+            padding: 15px; text-align: center; margin-bottom: 20px;
+            display: none;
+        }
+        .countdown-title { font-size: 14px; color: var(--primary-light); font-weight: 600; text-transform: uppercase; }
+        .countdown-timer { font-size: 24px; font-weight: 700; margin-top: 5px; font-family: monospace; }
+
         form { display: flex; flex-direction: column; gap: 15px; }
         .input-group { display: flex; flex-direction: column; gap: 6px; }
-        label { font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        label { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
         input {
-            width: 100%; padding: 12px 16px; background: rgba(15, 23, 42, 0.6);
-            border: 1px solid var(--glass-border); border-radius: 12px; color: var(--text-main);
-            font-size: 16px; font-family: 'Inter', sans-serif; transition: all 0.3s ease;
+            width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-main); font-size: 15px;
         }
-        input:focus { outline: none; border-color: var(--primary-light); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2); background: rgba(15, 23, 42, 0.9); }
-        button {
-            margin-top: 10px; padding: 14px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-            color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
-        }
-        button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -10px var(--primary-light); }
-        button:active { transform: translateY(0); }
-        .error { margin-top: 20px; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); color: #fca5a5; padding: 15px; border-radius: 12px; text-align: center; font-size: 14px; }
-        .times-container { margin-top: 30px; background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border); }
-        .times-title { text-align: center; font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #5eead4; }
-        .prayer-list { display: flex; flex-direction: column; gap: 12px; }
-        .prayer-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(255, 255, 255, 0.03); border-radius: 10px; transition: background 0.3s; border-left: 3px solid transparent; }
-        .prayer-item:hover { background: rgba(255, 255, 255, 0.08); }
-        .prayer-item.main-prayer { border-left-color: var(--primary-light); font-weight: 600; }
-        .prayer-item.other-time { opacity: 0.6; font-size: 14px; padding: 8px 16px; }
-        .prayer-name { display: flex; align-items: center; gap: 10px; }
-        .prayer-time { font-family: monospace; font-size: 16px; letter-spacing: 1px; }
+        input:focus { outline: none; border-color: var(--primary-light); }
         
-        /* Notification Badge */
-        .notif-badge { text-align: center; margin-top: 15px; font-size: 12px; color: var(--primary-light); }
+        .geo-btn {
+            background: transparent; border: 1px dashed var(--primary-light); color: var(--primary-light);
+            padding: 10px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; margin-bottom: 10px;
+        }
+        .geo-btn:hover { background: rgba(20, 184, 166, 0.1); }
+
+        button[type="submit"] {
+            padding: 14px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s;
+        }
+        button[type="submit"]:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -10px var(--primary-light); }
+        
+        .times-container { margin-top: 25px; background: rgba(15, 23, 42, 0.4); border-radius: 16px; padding: 20px; border: 1px solid var(--glass-border); }
+        .hijri-date { text-align: center; color: #fbbf24; font-size: 14px; font-weight: 600; margin-bottom: 15px; }
+        .prayer-list { display: flex; flex-direction: column; gap: 10px; }
+        .prayer-item { display: flex; justify-content: space-between; padding: 10px 14px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border-left: 3px solid transparent; }
+        .prayer-item.main-prayer { border-left-color: var(--primary-light); font-weight: 600; }
+        .prayer-item.other-time { opacity: 0.6; font-size: 13px; }
+        .qibla-box { margin-top: 15px; text-align: center; font-size: 14px; color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -88,114 +95,154 @@ HTML_TEMPLATE = """
         <h1>Azan Times</h1>
         <div class="subtitle">Jafari Method (Shia Ithna Ashari)</div>
 
+        <!-- NEXT PRAYER COUNTDOWN -->
+        <div class="countdown-banner" id="countdown-banner">
+            <div class="countdown-title" id="next-prayer-name">Next Prayer</div>
+            <div class="countdown-timer" id="countdown-timer">00:00:00</div>
+        </div>
+
         <form method="POST">
+            <!-- CITY SEARCH -->
+            <div class="input-group">
+                <label>Search City</label>
+                <input type="text" id="city-search" placeholder="e.g., Auckland, London, Qom" onkeyup="searchCity()">
+            </div>
+
+            <button type="button" class="geo-btn" onclick="getLocation()">📍 Use My Current Location</button>
+
             <div class="input-group">
                 <label>Latitude</label>
-                <input type="text" name="lat" placeholder="e.g., -36.8485" required>
+                <input type="text" name="lat" id="lat" required>
             </div>
             <div class="input-group">
                 <label>Longitude</label>
-                <input type="text" name="lng" placeholder="e.g., 174.7633" required>
+                <input type="text" name="lng" id="lng" required>
             </div>
             <div class="input-group">
                 <label>Timezone Offset (UTC)</label>
-                <input type="text" name="tz" placeholder="e.g., 12 or 13" required>
+                <input type="text" name="tz" id="tz" placeholder="e.g., 12 or -5" required>
             </div>
             <button type="submit">Calculate Times</button>
         </form>
 
-        {% if error %}
-            <div class="error"><strong>Error:</strong> {{ error }}</div>
-        {% endif %}
-
         {% if times %}
             <div class="times-container">
-                <div class="times-title">Today's Schedule</div>
+                <!-- HIJRI DATE -->
+                <div class="hijri-date" id="hijri-date">Loading Hijri Date...</div>
+                
                 <div class="prayer-list">
-                    <div class="prayer-item other-time">
-                        <span class="prayer-name">🌅 Sunrise (Shuruq)</span>
-                        <span class="prayer-time">{{ times['sunrise'] }}</span>
-                    </div>
-                    <div class="prayer-item main-prayer">
-                        <span class="prayer-name">🌄 Fajr</span>
-                        <span class="prayer-time">{{ times['fajr'] }}</span>
-                    </div>
-                    <div class="prayer-item main-prayer">
-                        <span class="prayer-name">☀️ Dhuhr</span>
-                        <span class="prayer-time">{{ times['dhuhr'] }}</span>
-                    </div>
-                    <div class="prayer-item main-prayer">
-                        <span class="prayer-name">🌤️ Asr</span>
-                        <span class="prayer-time">{{ times['asr'] }}</span>
-                    </div>
-                    <div class="prayer-item other-time">
-                        <span class="prayer-name">🌇 Sunset (Ghurub)</span>
-                        <span class="prayer-time">{{ times['sunset'] }}</span>
-                    </div>
-                    <div class="prayer-item main-prayer">
-                        <span class="prayer-name">🌆 Maghrib</span>
-                        <span class="prayer-time">{{ times['maghrib'] }}</span>
-                    </div>
-                    <div class="prayer-item main-prayer">
-                        <span class="prayer-name">🌃 Isha</span>
-                        <span class="prayer-time">{{ times['isha'] }}</span>
-                    </div>
+                    <div class="prayer-item other-time"><span>🌅 Sunrise</span><span>{{ times['sunrise'] }}</span></div>
+                    <div class="prayer-item main-prayer"><span>🌄 Fajr</span><span>{{ times['fajr'] }}</span></div>
+                    <div class="prayer-item main-prayer"><span>☀️ Dhuhr</span><span>{{ times['dhuhr'] }}</span></div>
+                    <div class="prayer-item main-prayer"><span>🌤️ Asr</span><span>{{ times['asr'] }}</span></div>
+                    <div class="prayer-item other-time"><span>🌇 Sunset</span><span>{{ times['sunset'] }}</span></div>
+                    <div class="prayer-item main-prayer"><span>🌆 Maghrib</span><span>{{ times['maghrib'] }}</span></div>
+                    <div class="prayer-item main-prayer"><span>🌃 Isha</span><span>{{ times['isha'] }}</span></div>
                 </div>
-                <div class="notif-badge" id="notif-status">Please allow notifications to hear the Azan.</div>
+
+                <!-- QIBLA DIRECTION -->
+                <div class="qibla-box">
+                    🕋 Qibla Direction: <strong>{{ qibla }}°</strong> from North
+                </div>
             </div>
 
-            <!-- JAVASCRIPT FOR NOTIFICATIONS -->
             <script>
-                // Get the times from Python and pass them to JS
+                // --- 1. CITY SEARCH (OpenStreetMap API) ---
+                let searchTimeout;
+                function searchCity() {
+                    clearTimeout(searchTimeout);
+                    const query = document.getElementById('city-search').value;
+                    if (query.length < 3) return;
+
+                    searchTimeout = setTimeout(() => {
+                        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.length > 0) {
+                                    document.getElementById('lat').value = parseFloat(data[0].lat).toFixed(4);
+                                    document.getElementById('lng').value = parseFloat(data[0].lon).toFixed(4);
+                                    // Calculate approximate timezone based on longitude (rough estimate)
+                                    const tz = Math.round(data[0].lon / 15);
+                                    document.getElementById('tz').value = tz;
+                                }
+                            });
+                    }, 800); // Wait 0.8s after typing stops
+                }
+
+                // --- 2. AUTO-DETECT LOCATION ---
+                function getLocation() {
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(position => {
+                            document.getElementById('lat').value = position.coords.latitude.toFixed(4);
+                            document.getElementById('lng').value = position.coords.longitude.toFixed(4);
+                            // Estimate timezone (rough)
+                            const tz = Math.round(position.coords.longitude / 15);
+                            document.getElementById('tz').value = tz;
+                        });
+                    } else {
+                        alert("Geolocation is not supported by this browser.");
+                    }
+                }
+
+                // --- 3. HIJRI DATE ---
+                const today = new Date();
+                const hijriFormatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', {
+                    day: 'numeric', month: 'long', year: 'numeric'
+                });
+                document.getElementById('hijri-date').innerText = hijriFormatter.format(today) + " AH";
+
+                // --- 4. NEXT PRAYER COUNTDOWN ---
                 const prayerTimes = {
                     "Fajr": "{{ times['fajr'] }}",
+                    "Sunrise": "{{ times['sunrise'] }}",
                     "Dhuhr": "{{ times['dhuhr'] }}",
                     "Asr": "{{ times['asr'] }}",
                     "Maghrib": "{{ times['maghrib'] }}",
                     "Isha": "{{ times['isha'] }}"
                 };
+                const tzOffset = parseFloat("{{ tz_offset }}");
 
-                // Ask for notification permission when the page loads
-                if ("Notification" in window) {
-                    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-                        Notification.requestPermission().then(function (permission) {
-                            if (permission === "granted") {
-                                document.getElementById("notif-status").innerText = "Notifications are active! Keep this tab open.";
-                            }
-                        });
-                    } else if (Notification.permission === "granted") {
-                        document.getElementById("notif-status").innerText = "Notifications are active! Keep this tab open.";
-                    }
-                }
-
-                // Function to check the time every minute
-                setInterval(() => {
+                function updateCountdown() {
                     const now = new Date();
-                    // Format current time as HH:MM (24-hour format)
-                    const currentTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    // Convert local time to the selected timezone
+                    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+                    const targetTime = new Date(utcTime + (3600000 * tzOffset));
+                    
+                    let nextPrayer = null;
+                    let nextTime = null;
 
-                    // Check if current time matches any prayer time
                     for (const [name, time] of Object.entries(prayerTimes)) {
-                        // We only want to trigger it once per minute
-                        if (currentTime === time) {
-                            showNotification(name, time);
+                        if (!time) continue;
+                        const [hours, minutes] = time.split(':');
+                        const prayerDate = new Date(targetTime);
+                        prayerDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+                        if (prayerDate > targetTime) {
+                            nextPrayer = name;
+                            nextTime = prayerDate;
+                            break;
                         }
                     }
-                }, 60000); // 60,000 ms = 1 minute
 
-                // Function to show the notification
-                function showNotification(prayerName, time) {
-                    if (Notification.permission === "granted") {
-                        new Notification("🕌 It's time for " + prayerName, {
-                            body: "The Azan for " + prayerName + " is at " + time,
-                            icon: "https://cdn-icons-png.flaticon.com/512/2933/2933228.png" // A generic mosque icon
-                        });
+                    const banner = document.getElementById('countdown-banner');
+                    if (nextPrayer && nextTime) {
+                        banner.style.display = 'block';
+                        document.getElementById('next-prayer-name').innerText = "Next: " + nextPrayer;
                         
-                        // Optional: Play a subtle alert sound using the browser's built-in audio
-                        // (Browsers block autoplay of loud audio, so we use a simple beep for now)
-                        const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-                        audio.play().catch(e => console.log("Audio play failed:", e));
+                        const diff = nextTime - targetTime;
+                        const h = Math.floor(diff / 3600000);
+                        const m = Math.floor((diff % 3600000) / 60000);
+                        const s = Math.floor((diff % 60000) / 1000);
+                        document.getElementById('countdown-timer').innerText = 
+                            `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                    } else {
+                        document.getElementById('next-prayer-name').innerText = "All prayers completed for today";
+                        document.getElementById('countdown-timer').innerText = "";
                     }
+                }
+                if (document.getElementById('countdown-banner')) {
+                    setInterval(updateCountdown, 1000);
+                    updateCountdown();
                 }
             </script>
         {% endif %}
@@ -204,10 +251,30 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# --- PYTHON MATH FOR QIBLA ---
+def calculate_qibla(lat, lng):
+    # Kaaba coordinates
+    kaaba_lat = math.radians(21.4225)
+    kaaba_lng = math.radians(39.8262)
+    user_lat = math.radians(lat)
+    user_lng = math.radians(lng)
+    
+    # Calculate difference in longitude
+    diff_lng = kaaba_lng - user_lng
+    
+    # Formula for initial bearing (Qibla)
+    x = math.sin(diff_lng)
+    y = math.cos(user_lat) * math.tan(kaaba_lat) - math.sin(user_lat) * math.cos(diff_lng)
+    
+    bearing = math.degrees(math.atan2(x, y))
+    return round((bearing + 360) % 360, 1)
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     times = None
     error = None
+    qibla = None
+    tz_offset = None
 
     if request.method == 'POST':
         try:
@@ -223,6 +290,9 @@ def index():
             
             times = pt.getTimes(date_tuple, (lat, lng), tz_offset)
             
+            # Calculate Qibla
+            qibla = calculate_qibla(lat, lng)
+
             if not isinstance(times, dict):
                 error = f"Library Error: {times}"
                 times = None
@@ -231,7 +301,7 @@ def index():
             error = f"Calculation Error: {str(e)}"
             
     template = Template(HTML_TEMPLATE)
-    return template.render(times=times, error=error)
+    return template.render(times=times, error=error, qibla=qibla, tz_offset=tz_offset)
 
 if __name__ == '__main__':
     app.run(debug=True)
