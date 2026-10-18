@@ -61,6 +61,8 @@ HTML_TEMPLATE = """
         h1 { text-align: center; font-size: 28px; font-weight: 700; margin-bottom: 5px; background: linear-gradient(to right, #5eead4, #2dd4bf); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .subtitle { text-align: center; color: var(--text-muted); font-size: 12px; margin-bottom: 20px; letter-spacing: 1px; text-transform: uppercase; }
         
+        .error-box { background: rgba(220, 38, 38, 0.1); border: 1px solid #ef4444; color: #fca5a5; padding: 15px; border-radius: 10px; margin-bottom: 15px; font-size: 14px; font-weight: bold; text-align: center; }
+
         .special-date { text-align: center; color: #fbbf24; font-size: 15px; font-weight: 700; margin-bottom: 15px; display: none; background: rgba(251, 191, 36, 0.1); padding: 10px; border-radius: 8px; border: 1px solid #fbbf24; }
 
         .countdown-banner { background: linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(15, 118, 110, 0.2)); border: 1px solid var(--primary-light); border-radius: 12px; padding: 15px; text-align: center; margin-bottom: 20px; display: none; }
@@ -164,6 +166,10 @@ HTML_TEMPLATE = """
         <h1>Azan Times</h1>
         <div class="subtitle">Jafari Method (Shia Ithna Ashari)</div>
 
+        {% if error %}
+            <div class="error-box">Error: {{ error }}</div>
+        {% endif %}
+
         <div class="special-date" id="special-date"></div>
 
         <div class="countdown-banner" id="countdown-banner">
@@ -182,15 +188,15 @@ HTML_TEMPLATE = """
 
             <div class="input-group">
                 <label>Latitude</label>
-                <input type="number" step="any" name="lat" id="lat" value="{{ request.form.get('lat', '') }}" required>
+                <input type="number" step="any" name="lat" id="lat" value="{{ request.form.get('lat', '-36.8485') }}" required>
             </div>
             <div class="input-group">
                 <label>Longitude</label>
-                <input type="number" step="any" name="lng" id="lng" value="{{ request.form.get('lng', '') }}" required>
+                <input type="number" step="any" name="lng" id="lng" value="{{ request.form.get('lng', '174.7633') }}" required>
             </div>
             <div class="input-group">
                 <label>Timezone Offset (UTC)</label>
-                <input type="number" step="any" name="tz" id="tz" value="{{ request.form.get('tz', '') }}" required>
+                <input type="number" step="any" name="tz" id="tz" value="{{ request.form.get('tz', '13') }}" required>
             </div>
 
             <div class="input-group">
@@ -422,13 +428,15 @@ HTML_TEMPLATE = """
                         .then(res => res.json())
                         .then(data => {
                             let html = '';
+                            if(data.error) { alert("Error: " + data.error); return; }
                             data.forEach(row => {
                                 html += `<tr><td>${row.date}</td><td>${row.fajr}</td><td>${row.dhuhr}</td><td>${row.asr}</td><td>${row.maghrib}</td><td>${row.isha}</td></tr>`;
                             });
                             document.getElementById('table-body').innerHTML = html;
                             document.getElementById('table-loading').style.display = 'none';
                             document.getElementById('table-container').style.display = 'block';
-                        });
+                        })
+                        .catch(err => alert("Network error loading timetable."));
                 }
                 function closeModal() { document.getElementById('monthly-modal').style.display = 'none'; }
             </script>
