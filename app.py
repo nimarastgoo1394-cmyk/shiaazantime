@@ -472,8 +472,18 @@ def index():
             tz_offset = float(request.form['tz'])
             method = request.form.get('method', 'Jafari')
             
-            pt = PrayTimes()
-            pt.set_method(method) 
+            # Initialize based on method using the correct praytimes syntax
+            if method == 'Jafari':
+                pt = PrayTimes('Jafari')
+                pt.adjust({'asr': 'Standard'})
+            elif method == 'Qum':
+                pt = PrayTimes('Jafari')
+                pt.adjust({'fajr': 17.7, 'isha': 14, 'maghrib': 4.5, 'midnight': 'Jafari', 'asr': 'Standard'})
+            elif method == 'Tehran':
+                pt = PrayTimes('Jafari')
+                pt.adjust({'fajr': 17.7, 'isha': 14, 'maghrib': 4.5, 'midnight': 'Jafari', 'asr': 'Standard'})
+            else:
+                pt = PrayTimes('Karachi')
             
             today = datetime.now()
             date_tuple = (today.year, today.month, today.day)
@@ -481,9 +491,8 @@ def index():
             times = pt.getTimes(date_tuple, (lat, lng), tz_offset)
             qibla = calculate_qibla(lat, lng)
 
-            if not isinstance(times, dict):
-                error = f"Library Error: {times}"
-                times = None
+            if not isinstance(times, dict) or 'fajr' not in times:
+                error = f"Could not calculate times. Check inputs."
 
         except Exception as e:
             error = f"Calculation Error: {str(e)}"
@@ -502,9 +511,18 @@ def get_timetable():
         tz_offset = float(request.args.get('tz'))
         method = request.args.get('method', 'Jafari')
         
-        pt = PrayTimes()
-        pt.set_method(method)
-        
+        if method == 'Jafari':
+            pt = PrayTimes('Jafari')
+            pt.adjust({'asr': 'Standard'})
+        elif method == 'Qum':
+            pt = PrayTimes('Jafari')
+            pt.adjust({'fajr': 17.7, 'isha': 14, 'maghrib': 4.5, 'midnight': 'Jafari', 'asr': 'Standard'})
+        elif method == 'Tehran':
+            pt = PrayTimes('Jafari')
+            pt.adjust({'fajr': 17.7, 'isha': 14, 'maghrib': 4.5, 'midnight': 'Jafari', 'asr': 'Standard'})
+        else:
+            pt = PrayTimes('Karachi')
+            
         today = datetime.now()
         timetable = []
         
