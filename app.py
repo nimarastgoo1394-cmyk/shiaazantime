@@ -69,11 +69,22 @@ HTML_TEMPLATE = """
 
         .input-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; }
         label { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        
+        /* Flexbox for City Search + Check Button */
+        .search-row { display: flex; gap: 10px; }
+        .search-row input[type="text"] { flex: 1; }
+        .search-row button {
+            padding: 0 20px; background: var(--primary-light); color: white; border: none; border-radius: 10px;
+            font-weight: bold; cursor: pointer; transition: 0.2s; font-family: 'Inter', sans-serif;
+        }
+        .search-row button:hover { background: var(--primary); transform: translateY(-1px); }
+
         input[type="text"], select {
             width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.1);
             border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-main); font-size: 15px; font-family: 'Inter', sans-serif;
         }
         body.light-mode input[type="text"], body.light-mode select { background: rgba(255, 255, 255, 0.5); }
+        input[type="text"]:focus { outline: none; border-color: var(--primary-light); }
         
         .btn-row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
         .geo-btn { flex: 1; background: transparent; border: 1px dashed var(--primary-light); color: var(--primary-light); padding: 10px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
@@ -154,9 +165,13 @@ HTML_TEMPLATE = """
             <div class="countdown-timer" id="countdown-timer">00:00:00</div>
         </div>
 
+        <!-- CITY SEARCH WITH CHECK BUTTON -->
         <div class="input-group">
             <label>Search City</label>
-            <input type="text" id="city-search" placeholder="e.g., Auckland, London, Qom" onkeyup="searchCity()">
+            <div class="search-row">
+                <input type="text" id="city-search" placeholder="e.g., Christchurch, London" onkeypress="handleEnter(event)">
+                <button type="button" onclick="searchCity()">Check</button>
+            </div>
         </div>
 
         <div class="input-group">
@@ -247,16 +262,41 @@ HTML_TEMPLATE = """
                     if (lat && lng && tz) document.getElementById('hidden-form').submit();
                 }
 
-                let searchTimeout;
+                // Trigger search when pressing Enter key
+                function handleEnter(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        searchCity();
+                    }
+                }
+
+                // Only search when the Check button is clicked
                 function searchCity() {
-                    clearTimeout(searchTimeout);
                     const query = document.getElementById('city-search').value;
-                    if (query.length < 3) return;
-                    searchTimeout = setTimeout(() => {
-                        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
-                            .then(res => res.json())
-                            .then(data => { if (data.length > 0) setLocation(data[0].lat, data[0].lon); });
-                    }, 800); 
+                    if (query.length < 2) return;
+
+                    const inputField = document.getElementById('city-search');
+                    const originalPlaceholder = inputField.placeholder;
+                    inputField.placeholder = "Searching...";
+                    inputField.style.borderColor = "var(--primary-light)";
+
+                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+                        .then(res => res.json())
+                        .then(data => {
+                            inputField.placeholder = originalPlaceholder;
+                            inputField.style.borderColor = "var(--glass-border)";
+                            
+                            if (data.length > 0) {
+                                setLocation(data[0].lat, data[0].lon);
+                            } else {
+                                alert("City not found. Please try adding the country name (e.g., 'Christchurch, NZ').");
+                            }
+                        })
+                        .catch(err => {
+                            inputField.placeholder = originalPlaceholder;
+                            inputField.style.borderColor = "var(--glass-border)";
+                            alert("Network error. Please try again.");
+                        });
                 }
 
                 function setLocation(lat, lng) {
@@ -389,7 +429,6 @@ HTML_TEMPLATE = """
                     document.getElementById('compass-needle').style.transform = `rotate(${qiblaAngle - compassHeading}deg)`;
                 }
 
-                // FIXED: Fetch 30-day table via API only when opened
                 function openModal() { 
                     document.getElementById('monthly-modal').style.display = 'flex'; 
                     document.getElementById('table-loading').style.display = 'block';
@@ -446,9 +485,8 @@ def index():
             tz_offset = float(request.form['tz'])
             method = request.form.get('method', 'Jafari')
             
-            # FIXED: Initialize PrayTimes properly for different methods
             pt = PrayTimes()
-            pt.set_method(method) # Use the built-in method setter
+            pt.set_method(method) 
             
             today = datetime.now()
             date_tuple = (today.year, today.month, today.day)
