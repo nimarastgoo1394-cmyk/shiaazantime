@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from praytimes import PrayTimes
 from datetime import datetime, timedelta
 import math
@@ -39,20 +39,15 @@ HTML_TEMPLATE = """
         body {
             font-family: 'Inter', sans-serif; color: var(--text-main);
             min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px;
-            background: #0f172a;
-            background-image: var(--bg-image);
-            background-size: cover; background-position: center; background-attachment: fixed;
+            background: #0f172a; background-image: var(--bg-image); background-size: cover; background-position: center; background-attachment: fixed;
             transition: background 0.4s ease, color 0.4s ease;
         }
-        /* Overlay to make text readable */
         body::before {
             content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.85) 100%);
             z-index: -1; transition: background 0.4s ease;
         }
-        body.light-mode::before {
-            background: linear-gradient(135deg, rgba(248, 250, 252, 0.85) 0%, rgba(226, 232, 240, 0.85) 100%);
-        }
+        body.light-mode::before { background: linear-gradient(135deg, rgba(248, 250, 252, 0.85) 0%, rgba(226, 232, 240, 0.85) 100%); }
         
         .container {
             width: 100%; max-width: 500px; background: var(--glass-bg); backdrop-filter: blur(16px);
@@ -79,11 +74,9 @@ HTML_TEMPLATE = """
             border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-main); font-size: 15px; font-family: 'Inter', sans-serif;
         }
         body.light-mode input[type="text"], body.light-mode select { background: rgba(255, 255, 255, 0.5); }
-        select:focus, input[type="text"]:focus { outline: none; border-color: var(--primary-light); }
         
         .btn-row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
         .geo-btn { flex: 1; background: transparent; border: 1px dashed var(--primary-light); color: var(--primary-light); padding: 10px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
-        .geo-btn:hover { background: rgba(20, 184, 166, 0.1); }
         
         .toggle-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .toggle-label { font-size: 14px; font-weight: 600; color: var(--text-main); }
@@ -99,7 +92,6 @@ HTML_TEMPLATE = """
         .hijri-date { text-align: center; color: #fbbf24; font-size: 14px; font-weight: 600; margin-bottom: 15px; }
         .prayer-list { display: flex; flex-direction: column; gap: 10px; }
         .prayer-item { display: flex; justify-content: space-between; padding: 10px 14px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; border-left: 3px solid transparent; }
-        body.light-mode .prayer-item { background: rgba(0,0,0,0.05); }
         .prayer-item.main-prayer { border-left-color: var(--primary-light); font-weight: 600; }
         .prayer-item.other-time { opacity: 0.6; font-size: 13px; }
         
@@ -114,7 +106,6 @@ HTML_TEMPLATE = """
         
         .dua-box { margin-top: 20px; padding: 15px; background: rgba(251, 191, 36, 0.1); border-left: 4px solid #fbbf24; border-radius: 8px; font-style: italic; font-size: 14px; }
         
-        /* Floating Tasbih */
         .tasbih-btn { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background: var(--primary-light); color: white; border: none; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; flex-direction: column; z-index: 100; transition: transform 0.1s; }
         .tasbih-btn:active { transform: scale(0.9); }
         .tasbih-btn span { font-size: 10px; font-weight: normal; }
@@ -141,8 +132,7 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    <!-- Floating Tasbih Counter -->
-    <button class="tasbih-btn" onclick="incrementTasbih()" title="Click to count Dhikr">
+    <button class="tasbih-btn" onclick="incrementTasbih()">
         <div id="tasbih-count">0</div>
         <span>Dhikr</span>
     </button>
@@ -191,7 +181,6 @@ HTML_TEMPLATE = """
             </label>
         </div>
 
-        <!-- Hidden form -->
         <form id="hidden-form" method="POST" style="display: none;">
             <input type="hidden" name="lat" id="lat">
             <input type="hidden" name="lng" id="lng">
@@ -233,23 +222,13 @@ HTML_TEMPLATE = """
                 <div class="modal-content">
                     <button class="close-btn" onclick="closeModal()">✖</button>
                     <h2 class="modal-title">30-Day Timetable</h2>
-                    <div style="overflow-x: auto;">
+                    <div id="table-loading" style="text-align:center; padding: 20px;">Calculating 30 days of prayer times...</div>
+                    <div id="table-container" style="overflow-x: auto; display: none;">
                         <table>
                             <thead>
                                 <tr><th>Date</th><th>Fajr</th><th>Dhuhr</th><th>Asr</th><th>Maghrib</th><th>Isha</th></tr>
                             </thead>
-                            <tbody>
-                                {% for row in timetable %}
-                                <tr>
-                                    <td>{{ row.date }}</td>
-                                    <td>{{ row.fajr }}</td>
-                                    <td>{{ row.dhuhr }}</td>
-                                    <td>{{ row.asr }}</td>
-                                    <td>{{ row.maghrib }}</td>
-                                    <td>{{ row.isha }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
+                            <tbody id="table-body"></tbody>
                         </table>
                     </div>
                     <button type="button" onclick="window.print()" style="margin-top: 20px; width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">🖨️ Print / Save as PDF</button>
@@ -292,27 +271,21 @@ HTML_TEMPLATE = """
                     autoCalculate();
                 }
 
-                // --- BACKGROUNDS ---
                 const backgrounds = [
-                    "url('https://images.unsplash.com/photo-1542884748-2b87b36c6b90?q=80&w=2070&auto=format&fit=crop')", // Mosque
-                    "url('https://images.unsplash.com/photo-1519817650390-64a93db51149?q=80&w=2070&auto=format&fit=crop')", // Kaaba
-                    "url('https://images.unsplash.com/photo-1532767153582-b1a0e5145009?q=80&w=2070&auto=format&fit=crop')", // Night sky
-                    "url('https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?q=80&w=2070&auto=format&fit=crop')"  // Desert
+                    "url('https://images.unsplash.com/photo-1542884748-2b87b36c6b90?q=80&w=2070&auto=format&fit=crop')",
+                    "url('https://images.unsplash.com/photo-1519817650390-64a93db51149?q=80&w=2070&auto=format&fit=crop')",
+                    "url('https://images.unsplash.com/photo-1532767153582-b1a0e5145009?q=80&w=2070&auto=format&fit=crop')",
+                    "url('https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?q=80&w=2070&auto=format&fit=crop')"
                 ];
                 let bgIndex = localStorage.getItem('azan_bg') || 0;
                 function applyBackground() { document.documentElement.style.setProperty('--bg-image', backgrounds[bgIndex]); }
                 function toggleBackground() { bgIndex = (bgIndex + 1) % backgrounds.length; localStorage.setItem('azan_bg', bgIndex); applyBackground(); }
 
-                // --- FULL SCREEN ---
                 function toggleFullScreen() {
-                    if (!document.fullscreenElement) {
-                        document.documentElement.requestFullscreen().catch(err => console.log(err));
-                    } else {
-                        if (document.exitFullscreen) document.exitFullscreen();
-                    }
+                    if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => console.log(err)); } 
+                    else { if (document.exitFullscreen) document.exitFullscreen(); }
                 }
 
-                // --- THEME ---
                 function toggleTheme() {
                     document.body.classList.toggle('light-mode');
                     const isLight = document.body.classList.contains('light-mode');
@@ -320,23 +293,15 @@ HTML_TEMPLATE = """
                     localStorage.setItem('azan_theme', isLight ? 'light' : 'dark');
                 }
 
-                // --- NOTIFICATIONS ---
                 function toggleNotifications(checkbox) {
                     if (checkbox.checked) {
                         Notification.requestPermission().then(permission => {
-                            if (permission !== "granted") {
-                                checkbox.checked = false;
-                                alert("Please allow notifications in your browser settings.");
-                            } else {
-                                localStorage.setItem('azan_notif', 'true');
-                            }
+                            if (permission !== "granted") { checkbox.checked = false; alert("Please allow notifications."); } 
+                            else { localStorage.setItem('azan_notif', 'true'); }
                         });
-                    } else {
-                        localStorage.setItem('azan_notif', 'false');
-                    }
+                    } else { localStorage.setItem('azan_notif', 'false'); }
                 }
 
-                // --- TASBIH ---
                 let tasbihCount = parseInt(localStorage.getItem('azan_tasbih') || '0');
                 document.getElementById('tasbih-count').innerText = tasbihCount;
                 function incrementTasbih() {
@@ -345,7 +310,6 @@ HTML_TEMPLATE = """
                     if (tasbihCount >= 100) { tasbihCount = 0; localStorage.setItem('azan_tasbih', 0); setTimeout(() => document.getElementById('tasbih-count').innerText = 0, 500); }
                 }
 
-                // --- CALCULATION METHOD ---
                 function changeMethod() {
                     document.getElementById('method-hidden').value = document.getElementById('calc-method').value;
                     autoCalculate();
@@ -353,7 +317,8 @@ HTML_TEMPLATE = """
 
                 window.onload = function() {
                     applyBackground();
-                    if (localStorage.getItem('azan_theme') === 'light') { document.body.classList.add('light-mode'); document.getElementById('theme-btn').innerText = '🌙'; } else { document.getElementById('theme-btn').innerText = '☀️'; }
+                    if (localStorage.getItem('azan_theme') === 'light') { document.body.classList.add('light-mode'); document.getElementById('theme-btn').innerText = '🌙'; } 
+                    else { document.getElementById('theme-btn').innerText = '☀️'; }
                     
                     if (localStorage.getItem('azan_lat')) {
                         document.getElementById('lat').value = localStorage.getItem('azan_lat'); document.getElementById('lng').value = localStorage.getItem('azan_lng'); document.getElementById('tz').value = localStorage.getItem('azan_tz'); document.getElementById('city-search').value = localStorage.getItem('azan_city') || "";
@@ -362,12 +327,11 @@ HTML_TEMPLATE = """
                     
                     if ("Notification" in window && Notification.permission === "granted" && localStorage.getItem('azan_notif') === 'true') document.getElementById('notif-toggle').checked = true;
 
-                    // Check Special Islamic Dates
                     const today = new Date();
-                    const hijriFormatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' });
-                    if(document.getElementById('hijri-date')) document.getElementById('hijri-date').innerText = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' }).format(today) + " AH";
+                    const hijriFormatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' });
+                    if(document.getElementById('hijri-date')) document.getElementById('hijri-date').innerText = hijriFormatter.format(today) + " AH";
                     
-                    const hijriParts = hijriFormatter.format(today).split('/');
+                    const hijriParts = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' }).format(today).split('/');
                     const hMonth = parseInt(hijriParts[0]); const hDay = parseInt(hijriParts[1]);
                     const dateBanner = document.getElementById('special-date');
                     
@@ -407,7 +371,6 @@ HTML_TEMPLATE = """
                         const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000), s = Math.floor((diff % 60000) / 1000);
                         document.getElementById('countdown-timer').innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                         
-                        // Azan Notification Trigger
                         if (diff < 1000 && diff > 0 && localStorage.getItem('azan_notif') === 'true') {
                             new Notification("🕌 It's time for " + nextPrayer, { body: "The Azan for " + nextPrayer + " is now.", icon: "https://cdn-icons-png.flaticon.com/512/2933/2933228.png" });
                             const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg'); audio.play().catch(e => console.log(e));
@@ -426,7 +389,29 @@ HTML_TEMPLATE = """
                     document.getElementById('compass-needle').style.transform = `rotate(${qiblaAngle - compassHeading}deg)`;
                 }
 
-                function openModal() { document.getElementById('monthly-modal').style.display = 'flex'; }
+                // FIXED: Fetch 30-day table via API only when opened
+                function openModal() { 
+                    document.getElementById('monthly-modal').style.display = 'flex'; 
+                    document.getElementById('table-loading').style.display = 'block';
+                    document.getElementById('table-container').style.display = 'none';
+                    
+                    const lat = document.getElementById('lat').value;
+                    const lng = document.getElementById('lng').value;
+                    const tz = document.getElementById('tz').value;
+                    const method = document.getElementById('calc-method').value;
+
+                    fetch(`/get_timetable?lat=${lat}&lng=${lng}&tz=${tz}&method=${method}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            let html = '';
+                            data.forEach(row => {
+                                html += `<tr><td>${row.date}</td><td>${row.fajr}</td><td>${row.dhuhr}</td><td>${row.asr}</td><td>${row.maghrib}</td><td>${row.isha}</td></tr>`;
+                            });
+                            document.getElementById('table-body').innerHTML = html;
+                            document.getElementById('table-loading').style.display = 'none';
+                            document.getElementById('table-container').style.display = 'block';
+                        });
+                }
                 function closeModal() { document.getElementById('monthly-modal').style.display = 'none'; }
             </script>
         {% endif %}
@@ -452,7 +437,6 @@ def index():
     error = None
     qibla = None
     tz_offset = None
-    timetable = []
     random_dua = random.choice(DUAS)
 
     if request.method == 'POST':
@@ -462,29 +446,15 @@ def index():
             tz_offset = float(request.form['tz'])
             method = request.form.get('method', 'Jafari')
             
-            pt = PrayTimes(method)
-            if method == 'Jafari': pt.adjust({'asr': 'Standard'})
+            # FIXED: Initialize PrayTimes properly for different methods
+            pt = PrayTimes()
+            pt.set_method(method) # Use the built-in method setter
             
             today = datetime.now()
             date_tuple = (today.year, today.month, today.day)
             
-            # Calculate today's times
             times = pt.getTimes(date_tuple, (lat, lng), tz_offset)
             qibla = calculate_qibla(lat, lng)
-
-            # Calculate 30-day timetable
-            for i in range(30):
-                future_date = today + timedelta(days=i)
-                f_tuple = (future_date.year, future_date.month, future_date.day)
-                f_times = pt.getTimes(f_tuple, (lat, lng), tz_offset)
-                timetable.append({
-                    'date': future_date.strftime("%b %d"),
-                    'fajr': f_times['fajr'],
-                    'dhuhr': f_times['dhuhr'],
-                    'asr': f_times['asr'],
-                    'maghrib': f_times['maghrib'],
-                    'isha': f_times['isha']
-                })
 
             if not isinstance(times, dict):
                 error = f"Library Error: {times}"
@@ -496,8 +466,38 @@ def index():
     template = Template(HTML_TEMPLATE)
     return template.render(
         times=times, error=error, qibla=qibla, 
-        tz_offset=tz_offset, timetable=timetable, random_dua=random_dua
+        tz_offset=tz_offset, random_dua=random_dua
     )
+
+@app.route('/get_timetable')
+def get_timetable():
+    try:
+        lat = float(request.args.get('lat'))
+        lng = float(request.args.get('lng'))
+        tz_offset = float(request.args.get('tz'))
+        method = request.args.get('method', 'Jafari')
+        
+        pt = PrayTimes()
+        pt.set_method(method)
+        
+        today = datetime.now()
+        timetable = []
+        
+        for i in range(30):
+            future_date = today + timedelta(days=i)
+            f_tuple = (future_date.year, future_date.month, future_date.day)
+            f_times = pt.getTimes(f_tuple, (lat, lng), tz_offset)
+            timetable.append({
+                'date': future_date.strftime("%b %d"),
+                'fajr': f_times['fajr'],
+                'dhuhr': f_times['dhuhr'],
+                'asr': f_times['asr'],
+                'maghrib': f_times['maghrib'],
+                'isha': f_times['isha']
+            })
+        return jsonify(timetable)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
