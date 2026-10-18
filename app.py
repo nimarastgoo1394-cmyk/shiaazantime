@@ -78,18 +78,23 @@ HTML_TEMPLATE = """
         }
         .search-row button:hover { background: var(--primary); transform: translateY(-1px); }
 
-        input[type="text"], select {
+        input[type="text"], input[type="number"], select {
             width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.1);
             border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-main); font-size: 15px; font-family: 'Inter', sans-serif;
         }
-        body.light-mode input[type="text"], body.light-mode select { background: rgba(255, 255, 255, 0.5); }
-        input[type="text"]:focus { outline: none; border-color: var(--primary-light); }
+        body.light-mode input[type="text"], body.light-mode input[type="number"], body.light-mode select { background: rgba(255, 255, 255, 0.5); }
+        input:focus, select:focus { outline: none; border-color: var(--primary-light); }
         
-        .error-msg { color: #ef4444; font-size: 13px; margin-top: 5px; display: none; font-weight: bold; }
-
         .btn-row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
         .geo-btn { flex: 1; background: transparent; border: 1px dashed var(--primary-light); color: var(--primary-light); padding: 10px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
         
+        .calc-btn {
+            width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.2s;
+            margin-bottom: 20px;
+        }
+        .calc-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -10px var(--primary-light); }
+
         .toggle-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .toggle-label { font-size: 14px; font-weight: 600; color: var(--text-main); }
         .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
@@ -166,28 +171,44 @@ HTML_TEMPLATE = """
             <div class="countdown-timer" id="countdown-timer">00:00:00</div>
         </div>
 
-        <div class="input-group">
-            <label>Search City</label>
-            <div class="search-row">
-                <input type="text" id="city-search" placeholder="e.g., Christchurch, London" onkeypress="handleEnter(event)">
-                <button type="button" id="check-btn" onclick="searchCity()">Check</button>
+        <form method="POST">
+            <div class="input-group">
+                <label>Search City (Optional)</label>
+                <div class="search-row">
+                    <input type="text" id="city-search" placeholder="e.g., Christchurch, London">
+                    <button type="button" onclick="searchCity()">Check</button>
+                </div>
             </div>
-            <div class="error-msg" id="search-error"></div>
-        </div>
 
-        <div class="input-group">
-            <label>Calculation Method</label>
-            <select id="calc-method" onchange="changeMethod()">
-                <option value="Jafari">Jafari (Shia Ithna Ashari)</option>
-                <option value="Qum">Leva Institute, Qum</option>
-                <option value="Tehran">University of Tehran</option>
-                <option value="Karachi">University of Islamic Sciences, Karachi</option>
-            </select>
-        </div>
+            <div class="input-group">
+                <label>Latitude</label>
+                <input type="number" step="any" name="lat" id="lat" value="{{ request.form.get('lat', '') }}" required>
+            </div>
+            <div class="input-group">
+                <label>Longitude</label>
+                <input type="number" step="any" name="lng" id="lng" value="{{ request.form.get('lng', '') }}" required>
+            </div>
+            <div class="input-group">
+                <label>Timezone Offset (UTC)</label>
+                <input type="number" step="any" name="tz" id="tz" value="{{ request.form.get('tz', '') }}" required>
+            </div>
 
-        <div class="btn-row">
-            <button type="button" class="geo-btn" onclick="getLocation()">📍 Use My Location</button>
-        </div>
+            <div class="input-group">
+                <label>Calculation Method</label>
+                <select name="method">
+                    <option value="Jafari" {% if request.form.get('method') == 'Jafari' %}selected{% endif %}>Jafari (Shia Ithna Ashari)</option>
+                    <option value="Qum" {% if request.form.get('method') == 'Qum' %}selected{% endif %}>Leva Institute, Qum</option>
+                    <option value="Tehran" {% if request.form.get('method') == 'Tehran' %}selected{% endif %}>University of Tehran</option>
+                    <option value="Karachi" {% if request.form.get('method') == 'Karachi' %}selected{% endif %}>University of Islamic Sciences, Karachi</option>
+                </select>
+            </div>
+
+            <div class="btn-row">
+                <button type="button" class="geo-btn" onclick="getLocation()">📍 Use My Location</button>
+            </div>
+
+            <button type="submit" class="calc-btn">Calculate Times</button>
+        </form>
 
         <div class="toggle-container">
             <span class="toggle-label">🔔 Azan Notifications</span>
@@ -196,13 +217,6 @@ HTML_TEMPLATE = """
                 <span class="slider"></span>
             </label>
         </div>
-
-        <form id="hidden-form" method="POST" style="display: none;">
-            <input type="hidden" name="lat" id="lat">
-            <input type="hidden" name="lng" id="lng">
-            <input type="hidden" name="tz" id="tz">
-            <input type="hidden" name="method" id="method-hidden" value="Jafari">
-        </form>
 
         {% if times %}
             <div class="times-container">
@@ -256,90 +270,31 @@ HTML_TEMPLATE = """
                 const prayerTimes = { "Fajr": "{{ times['fajr'] }}", "Sunrise": "{{ times['sunrise'] }}", "Dhuhr": "{{ times['dhuhr'] }}", "Asr": "{{ times['asr'] }}", "Maghrib": "{{ times['maghrib'] }}", "Isha": "{{ times['isha'] }}" };
                 const tzOffset = parseFloat("{{ tz_offset }}");
 
-                function autoCalculate() {
-                    const lat = document.getElementById('lat').value;
-                    const lng = document.getElementById('lng').value;
-                    const tz = document.getElementById('tz').value;
-                    if (lat && lng && tz) {
-                        document.getElementById('hidden-form').submit();
-                    }
-                }
-
-                function handleEnter(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        searchCity();
-                    }
-                }
-
-                // Switched to Open-Meteo API for Geocoding
                 function searchCity() {
                     const query = document.getElementById('city-search').value.trim();
-                    const errorBox = document.getElementById('search-error');
-                    
-                    if (query.length < 2) {
-                        errorBox.innerText = "Please type at least 2 characters.";
-                        errorBox.style.display = 'block';
-                        return;
-                    }
+                    if (query.length < 2) return alert("Type a city name first.");
 
-                    errorBox.style.display = 'none';
-                    const btn = document.getElementById('check-btn');
-                    const originalText = btn.innerText;
-                    btn.innerText = "...";
-                    btn.disabled = true;
-
-                    // Using Open-Meteo Geocoding API (Very reliable, no CORS issues)
                     fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`)
                         .then(res => res.json())
                         .then(data => {
-                            btn.innerText = originalText;
-                            btn.disabled = false;
-                            
                             if (data.results && data.results.length > 0) {
                                 const city = data.results[0];
-                                // Use built-in timezone from Open-Meteo if available
-                                setLocation(city.latitude, city.longitude, city.timezone);
+                                document.getElementById('lat').value = parseFloat(city.latitude).toFixed(4);
+                                document.getElementById('lng').value = parseFloat(city.longitude).toFixed(4);
+                                
+                                try {
+                                    const now = new Date();
+                                    const dateInTz = new Date(now.toLocaleString("en-US", {timeZone: city.timezone}));
+                                    const tz = Math.round((dateInTz.getTime() - now.getTime()) / 3600000);
+                                    document.getElementById('tz').value = tz;
+                                } catch(e) {
+                                    document.getElementById('tz').value = Math.round(city.longitude / 15);
+                                }
                             } else {
-                                errorBox.innerText = "City not found. Try spelling it differently.";
-                                errorBox.style.display = 'block';
+                                alert("City not found. Please try another spelling.");
                             }
                         })
-                        .catch(err => {
-                            btn.innerText = originalText;
-                            btn.disabled = false;
-                            errorBox.innerText = "Network error. Please try again.";
-                            errorBox.style.display = 'block';
-                        });
-                }
-
-                function setLocation(lat, lng, apiTimezone) {
-                    document.getElementById('lat').value = parseFloat(lat).toFixed(4);
-                    document.getElementById('lng').value = parseFloat(lng).toFixed(4);
-                    
-                    let tz = 0;
-                    try {
-                        // If API provided timezone string, use it to find offset
-                        let tzName = apiTimezone;
-                        if (!tzName) {
-                            tzName = tzlookup(lat, lng); // Fallback
-                        }
-                        const now = new Date();
-                        const dateInTz = new Date(now.toLocaleString("en-US", {timeZone: tzName}));
-                        tz = Math.round((dateInTz.getTime() - now.getTime()) / 3600000);
-                    } catch (e) {
-                        console.log("Timezone lookup failed, using rough estimate", e);
-                        tz = Math.round(lng / 15);
-                    }
-                    
-                    document.getElementById('tz').value = tz;
-                    
-                    localStorage.setItem('azan_lat', lat); 
-                    localStorage.setItem('azan_lng', lng); 
-                    localStorage.setItem('azan_tz', tz); 
-                    localStorage.setItem('azan_city', document.getElementById('city-search').value);
-                    
-                    autoCalculate();
+                        .catch(err => alert("Network error. Please try again."));
                 }
 
                 const backgrounds = [
@@ -381,20 +336,10 @@ HTML_TEMPLATE = """
                     if (tasbihCount >= 100) { tasbihCount = 0; localStorage.setItem('azan_tasbih', 0); setTimeout(() => document.getElementById('tasbih-count').innerText = 0, 500); }
                 }
 
-                function changeMethod() {
-                    document.getElementById('method-hidden').value = document.getElementById('calc-method').value;
-                    autoCalculate();
-                }
-
                 window.onload = function() {
                     applyBackground();
                     if (localStorage.getItem('azan_theme') === 'light') { document.body.classList.add('light-mode'); document.getElementById('theme-btn').innerText = '🌙'; } 
                     else { document.getElementById('theme-btn').innerText = '☀️'; }
-                    
-                    if (localStorage.getItem('azan_lat')) {
-                        document.getElementById('lat').value = localStorage.getItem('azan_lat'); document.getElementById('lng').value = localStorage.getItem('azan_lng'); document.getElementById('tz').value = localStorage.getItem('azan_tz'); document.getElementById('city-search').value = localStorage.getItem('azan_city') || "";
-                        autoCalculate();
-                    }
                     
                     if ("Notification" in window && Notification.permission === "granted" && localStorage.getItem('azan_notif') === 'true') document.getElementById('notif-toggle').checked = true;
 
@@ -418,7 +363,10 @@ HTML_TEMPLATE = """
                     if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(position => {
                             document.getElementById('city-search').value = "Current Location";
-                            setLocation(position.coords.latitude, position.coords.longitude, null);
+                            document.getElementById('lat').value = position.coords.latitude.toFixed(4);
+                            document.getElementById('lng').value = position.coords.longitude.toFixed(4);
+                            const tz = Math.round(position.coords.longitude / 15);
+                            document.getElementById('tz').value = tz;
                         });
                     }
                 }
@@ -468,7 +416,7 @@ HTML_TEMPLATE = """
                     const lat = document.getElementById('lat').value;
                     const lng = document.getElementById('lng').value;
                     const tz = document.getElementById('tz').value;
-                    const method = document.getElementById('calc-method').value;
+                    const method = document.querySelector('select[name="method"]').value;
 
                     fetch(`/get_timetable?lat=${lat}&lng=${lng}&tz=${tz}&method=${method}`)
                         .then(res => res.json())
