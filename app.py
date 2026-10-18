@@ -70,7 +70,6 @@ HTML_TEMPLATE = """
         .input-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; }
         label { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
         
-        /* Flexbox for City Search + Check Button */
         .search-row { display: flex; gap: 10px; }
         .search-row input[type="text"] { flex: 1; }
         .search-row button {
@@ -165,12 +164,11 @@ HTML_TEMPLATE = """
             <div class="countdown-timer" id="countdown-timer">00:00:00</div>
         </div>
 
-        <!-- CITY SEARCH WITH CHECK BUTTON -->
         <div class="input-group">
             <label>Search City</label>
             <div class="search-row">
                 <input type="text" id="city-search" placeholder="e.g., Christchurch, London" onkeypress="handleEnter(event)">
-                <button type="button" onclick="searchCity()">Check</button>
+                <button type="button" id="check-btn" onclick="searchCity()">Check</button>
             </div>
         </div>
 
@@ -259,10 +257,14 @@ HTML_TEMPLATE = """
                     const lat = document.getElementById('lat').value;
                     const lng = document.getElementById('lng').value;
                     const tz = document.getElementById('tz').value;
-                    if (lat && lng && tz) document.getElementById('hidden-form').submit();
+                    if (lat && lng && tz) {
+                        console.log("Submitting form with:", lat, lng, tz);
+                        document.getElementById('hidden-form').submit();
+                    } else {
+                        console.log("Missing fields, cannot submit.");
+                    }
                 }
 
-                // Trigger search when pressing Enter key
                 function handleEnter(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
@@ -270,21 +272,20 @@ HTML_TEMPLATE = """
                     }
                 }
 
-                // Only search when the Check button is clicked
                 function searchCity() {
                     const query = document.getElementById('city-search').value;
                     if (query.length < 2) return;
 
-                    const inputField = document.getElementById('city-search');
-                    const originalPlaceholder = inputField.placeholder;
-                    inputField.placeholder = "Searching...";
-                    inputField.style.borderColor = "var(--primary-light)";
+                    const btn = document.getElementById('check-btn');
+                    const originalText = btn.innerText;
+                    btn.innerText = "...";
+                    btn.disabled = true;
 
                     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
                         .then(res => res.json())
                         .then(data => {
-                            inputField.placeholder = originalPlaceholder;
-                            inputField.style.borderColor = "var(--glass-border)";
+                            btn.innerText = originalText;
+                            btn.disabled = false;
                             
                             if (data.length > 0) {
                                 setLocation(data[0].lat, data[0].lon);
@@ -293,8 +294,8 @@ HTML_TEMPLATE = """
                             }
                         })
                         .catch(err => {
-                            inputField.placeholder = originalPlaceholder;
-                            inputField.style.borderColor = "var(--glass-border)";
+                            btn.innerText = originalText;
+                            btn.disabled = false;
                             alert("Network error. Please try again.");
                         });
                 }
@@ -302,12 +303,27 @@ HTML_TEMPLATE = """
                 function setLocation(lat, lng) {
                     document.getElementById('lat').value = parseFloat(lat).toFixed(4);
                     document.getElementById('lng').value = parseFloat(lng).toFixed(4);
-                    const tzName = tzlookup(lat, lng);
-                    const now = new Date();
-                    const dateInTz = new Date(now.toLocaleString("en-US", {timeZone: tzName}));
-                    const tz = Math.round((dateInTz.getTime() - now.getTime()) / 3600000);
+                    
+                    let tz = 0;
+                    try {
+                        // Try using the timezone lookup library
+                        const tzName = tzlookup(lat, lng);
+                        const now = new Date();
+                        const dateInTz = new Date(now.toLocaleString("en-US", {timeZone: tzName}));
+                        tz = Math.round((dateInTz.getTime() - now.getTime()) / 3600000);
+                    } catch (e) {
+                        console.log("Timezone lookup failed, using rough estimate", e);
+                        // Fallback: Rough estimate based on longitude
+                        tz = Math.round(lng / 15);
+                    }
+                    
                     document.getElementById('tz').value = tz;
-                    localStorage.setItem('azan_lat', lat); localStorage.setItem('azan_lng', lng); localStorage.setItem('azan_tz', tz); localStorage.setItem('azan_city', document.getElementById('city-search').value);
+                    
+                    localStorage.setItem('azan_lat', lat); 
+                    localStorage.setItem('azan_lng', lng); 
+                    localStorage.setItem('azan_tz', tz); 
+                    localStorage.setItem('azan_city', document.getElementById('city-search').value);
+                    
                     autoCalculate();
                 }
 
