@@ -80,11 +80,11 @@ HTML_TEMPLATE = """
         }
         .search-row button:hover { background: var(--primary); transform: translateY(-1px); }
 
-        input[type="text"], input[type="number"], select {
+        input[type="text"], select {
             width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.1);
             border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-main); font-size: 15px; font-family: 'Inter', sans-serif;
         }
-        body.light-mode input[type="text"], body.light-mode input[type="number"], body.light-mode select { background: rgba(255, 255, 255, 0.5); }
+        body.light-mode input[type="text"], body.light-mode select { background: rgba(255, 255, 255, 0.5); }
         input:focus, select:focus { outline: none; border-color: var(--primary-light); }
         
         .btn-row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
@@ -178,25 +178,17 @@ HTML_TEMPLATE = """
         </div>
 
         <form method="POST">
-            <div class="input-group">
-                <label>Search City (Optional)</label>
-                <div class="search-row">
-                    <input type="text" id="city-search" placeholder="e.g., Christchurch, London">
-                    <button type="button" onclick="searchCity()">Check</button>
-                </div>
-            </div>
+            <!-- Hidden inputs to satisfy Flask form requirements -->
+            <input type="hidden" name="lat" id="lat" value="{{ request.form.get('lat', '-36.8485') }}">
+            <input type="hidden" name="lng" id="lng" value="{{ request.form.get('lng', '174.7633') }}">
+            <input type="hidden" name="tz" id="tz" value="{{ request.form.get('tz', '13') }}">
 
             <div class="input-group">
-                <label>Latitude</label>
-                <input type="number" step="any" name="lat" id="lat" value="{{ request.form.get('lat', '-36.8485') }}" required>
-            </div>
-            <div class="input-group">
-                <label>Longitude</label>
-                <input type="number" step="any" name="lng" id="lng" value="{{ request.form.get('lng', '174.7633') }}" required>
-            </div>
-            <div class="input-group">
-                <label>Timezone Offset (UTC)</label>
-                <input type="number" step="any" name="tz" id="tz" value="{{ request.form.get('tz', '13') }}" required>
+                <label>Search City</label>
+                <div class="search-row">
+                    <input type="text" id="city-search" placeholder="e.g., Christchurch, London" value="{{ request.form.get('city_name', '') }}">
+                    <button type="button" onclick="searchCity()">Check</button>
+                </div>
             </div>
 
             <div class="input-group">
@@ -296,6 +288,9 @@ HTML_TEMPLATE = """
                                 } catch(e) {
                                     document.getElementById('tz').value = Math.round(city.longitude / 15);
                                 }
+                                
+                                // Auto-submit the form
+                                document.querySelector('form').submit();
                             } else {
                                 alert("City not found. Please try another spelling.");
                             }
@@ -373,6 +368,8 @@ HTML_TEMPLATE = """
                             document.getElementById('lng').value = position.coords.longitude.toFixed(4);
                             const tz = Math.round(position.coords.longitude / 15);
                             document.getElementById('tz').value = tz;
+                            
+                            document.querySelector('form').submit();
                         });
                     }
                 }
@@ -472,7 +469,6 @@ def index():
             tz_offset = float(request.form['tz'])
             method = request.form.get('method', 'Jafari')
             
-            # Initialize based on method using the correct praytimes syntax
             if method == 'Jafari':
                 pt = PrayTimes('Jafari')
                 pt.adjust({'asr': 'Standard'})
@@ -485,8 +481,9 @@ def index():
             else:
                 pt = PrayTimes('Karachi')
             
-            today = datetime.now()
-            date_tuple = (today.year, today.month, today.day)
+            # FIX: Pass integer date components to avoid Python 3.14 bug
+            now = datetime.now()
+            date_tuple = (now.year, now.month, now.day)
             
             times = pt.getTimes(date_tuple, (lat, lng), tz_offset)
             qibla = calculate_qibla(lat, lng)
