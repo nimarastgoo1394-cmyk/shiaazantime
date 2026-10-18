@@ -85,6 +85,8 @@ HTML_TEMPLATE = """
         body.light-mode input[type="text"], body.light-mode select { background: rgba(255, 255, 255, 0.5); }
         input[type="text"]:focus { outline: none; border-color: var(--primary-light); }
         
+        .error-msg { color: #ef4444; font-size: 13px; margin-top: 5px; display: none; font-weight: bold; }
+
         .btn-row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
         .geo-btn { flex: 1; background: transparent; border: 1px dashed var(--primary-light); color: var(--primary-light); padding: 10px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
         
@@ -170,6 +172,7 @@ HTML_TEMPLATE = """
                 <input type="text" id="city-search" placeholder="e.g., Christchurch, London" onkeypress="handleEnter(event)">
                 <button type="button" id="check-btn" onclick="searchCity()">Check</button>
             </div>
+            <div class="error-msg" id="search-error"></div>
         </div>
 
         <div class="input-group">
@@ -258,10 +261,7 @@ HTML_TEMPLATE = """
                     const lng = document.getElementById('lng').value;
                     const tz = document.getElementById('tz').value;
                     if (lat && lng && tz) {
-                        console.log("Submitting form with:", lat, lng, tz);
                         document.getElementById('hidden-form').submit();
-                    } else {
-                        console.log("Missing fields, cannot submit.");
                     }
                 }
 
@@ -272,48 +272,63 @@ HTML_TEMPLATE = """
                     }
                 }
 
+                // Switched to Open-Meteo API for Geocoding
                 function searchCity() {
-                    const query = document.getElementById('city-search').value;
-                    if (query.length < 2) return;
+                    const query = document.getElementById('city-search').value.trim();
+                    const errorBox = document.getElementById('search-error');
+                    
+                    if (query.length < 2) {
+                        errorBox.innerText = "Please type at least 2 characters.";
+                        errorBox.style.display = 'block';
+                        return;
+                    }
 
+                    errorBox.style.display = 'none';
                     const btn = document.getElementById('check-btn');
                     const originalText = btn.innerText;
                     btn.innerText = "...";
                     btn.disabled = true;
 
-                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+                    // Using Open-Meteo Geocoding API (Very reliable, no CORS issues)
+                    fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`)
                         .then(res => res.json())
                         .then(data => {
                             btn.innerText = originalText;
                             btn.disabled = false;
                             
-                            if (data.length > 0) {
-                                setLocation(data[0].lat, data[0].lon);
+                            if (data.results && data.results.length > 0) {
+                                const city = data.results[0];
+                                // Use built-in timezone from Open-Meteo if available
+                                setLocation(city.latitude, city.longitude, city.timezone);
                             } else {
-                                alert("City not found. Please try adding the country name (e.g., 'Christchurch, NZ').");
+                                errorBox.innerText = "City not found. Try spelling it differently.";
+                                errorBox.style.display = 'block';
                             }
                         })
                         .catch(err => {
                             btn.innerText = originalText;
                             btn.disabled = false;
-                            alert("Network error. Please try again.");
+                            errorBox.innerText = "Network error. Please try again.";
+                            errorBox.style.display = 'block';
                         });
                 }
 
-                function setLocation(lat, lng) {
+                function setLocation(lat, lng, apiTimezone) {
                     document.getElementById('lat').value = parseFloat(lat).toFixed(4);
                     document.getElementById('lng').value = parseFloat(lng).toFixed(4);
                     
                     let tz = 0;
                     try {
-                        // Try using the timezone lookup library
-                        const tzName = tzlookup(lat, lng);
+                        // If API provided timezone string, use it to find offset
+                        let tzName = apiTimezone;
+                        if (!tzName) {
+                            tzName = tzlookup(lat, lng); // Fallback
+                        }
                         const now = new Date();
                         const dateInTz = new Date(now.toLocaleString("en-US", {timeZone: tzName}));
                         tz = Math.round((dateInTz.getTime() - now.getTime()) / 3600000);
                     } catch (e) {
                         console.log("Timezone lookup failed, using rough estimate", e);
-                        // Fallback: Rough estimate based on longitude
                         tz = Math.round(lng / 15);
                     }
                     
@@ -403,7 +418,7 @@ HTML_TEMPLATE = """
                     if (navigator.geolocation) {
                         navigator.geolocation.getCurrentPosition(position => {
                             document.getElementById('city-search').value = "Current Location";
-                            setLocation(position.coords.latitude, position.coords.longitude);
+                            setLocation(position.coords.latitude, position.coords.longitude, null);
                         });
                     }
                 }
