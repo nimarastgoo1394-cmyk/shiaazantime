@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from praytimes import PrayTimes
-from datetime import datetime, timedelta
+from datetime import datetime
 import math
 import random
 from jinja2 import Template
@@ -177,8 +177,7 @@ HTML_TEMPLATE = """
             <div class="countdown-timer" id="countdown-timer">00:00:00</div>
         </div>
 
-        <form method="POST">
-            <!-- Hidden inputs to satisfy Flask form requirements -->
+        <form method="POST" id="main-form">
             <input type="hidden" name="lat" id="lat" value="{{ request.form.get('lat', '-36.8485') }}">
             <input type="hidden" name="lng" id="lng" value="{{ request.form.get('lng', '174.7633') }}">
             <input type="hidden" name="tz" id="tz" value="{{ request.form.get('tz', '13') }}">
@@ -186,7 +185,7 @@ HTML_TEMPLATE = """
             <div class="input-group">
                 <label>Search City</label>
                 <div class="search-row">
-                    <input type="text" id="city-search" placeholder="e.g., Christchurch, London" value="{{ request.form.get('city_name', '') }}">
+                    <input type="text" id="city-search" placeholder="e.g., Christchurch, London" value="{{ request.form.get('city_name', '') }}" onkeypress="handleEnter(event)">
                     <button type="button" onclick="searchCity()">Check</button>
                 </div>
             </div>
@@ -268,6 +267,13 @@ HTML_TEMPLATE = """
                 const prayerTimes = { "Fajr": "{{ times['fajr'] }}", "Sunrise": "{{ times['sunrise'] }}", "Dhuhr": "{{ times['dhuhr'] }}", "Asr": "{{ times['asr'] }}", "Maghrib": "{{ times['maghrib'] }}", "Isha": "{{ times['isha'] }}" };
                 const tzOffset = parseFloat("{{ tz_offset }}");
 
+                function handleEnter(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        searchCity();
+                    }
+                }
+
                 function searchCity() {
                     const query = document.getElementById('city-search').value.trim();
                     if (query.length < 2) return alert("Type a city name first.");
@@ -289,8 +295,17 @@ HTML_TEMPLATE = """
                                     document.getElementById('tz').value = Math.round(city.longitude / 15);
                                 }
                                 
-                                // Auto-submit the form
-                                document.querySelector('form').submit();
+                                let cityInput = document.getElementById('city-name-hidden');
+                                if (!cityInput) {
+                                    cityInput = document.createElement('input');
+                                    cityInput.type = 'hidden';
+                                    cityInput.id = 'city-name-hidden';
+                                    cityInput.name = 'city_name';
+                                    document.getElementById('main-form').appendChild(cityInput);
+                                }
+                                cityInput.value = query;
+                                
+                                document.getElementById('main-form').submit();
                             } else {
                                 alert("City not found. Please try another spelling.");
                             }
@@ -369,7 +384,7 @@ HTML_TEMPLATE = """
                             const tz = Math.round(position.coords.longitude / 15);
                             document.getElementById('tz').value = tz;
                             
-                            document.querySelector('form').submit();
+                            document.getElementById('main-form').submit();
                         });
                     }
                 }
@@ -481,7 +496,6 @@ def index():
             else:
                 pt = PrayTimes('Karachi')
             
-            # FIX: Pass integer date components to avoid Python 3.14 bug
             now = datetime.now()
             date_tuple = (now.year, now.month, now.day)
             
